@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "cp-schema-registry.fullname" . }}
+  labels:
+    app: {{ template "cp-schema-registry.name" . }}
+    chart: {{ template "cp-schema-registry.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.schema_registry.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ template "cp-schema-registry.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "cp-schema-registry.name" . }}
+        release: {{ .Release.Name }}
+      {{- if or .Values.schema_registry.podAnnotations .Values.schema_registry.prometheus.jmx.enabled }}
+      annotations:
+      {{- range $key, $value := .Values.schema_registry.podAnnotations }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+      {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.schema_registry.prometheus.jmx.port | quote }}
+      {{- end }}
+      {{- end }}
+    spec:
+      securityContext:
+      {{- if .Values.schema_registry.securityContext }}
+{{ toYaml .Values.schema_registry.securityContext | indent 8 }}
+      {{- end}}
+      containers:
+        {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+        - name: prometheus-jmx-exporter
+          image: "{{ .Values.schema_registry.prometheus.jmx.image }}:{{ .Values.schema_registry.prometheus.jmx.imageTag }}"
+          imagePullPolicy: "{{ .Values.schema_registry.prometheus.jmx.imagePullPolicy }}"
+          command:
+          - java
+          - -XX:+UnlockExperimentalVMOptions
+          - -XX:+UseCGroupMemoryLimitForHeap
+          - -XX:MaxRAMFraction=1
+          - -XshowSettings:vm
+          - -jar
+          - jmx_prometheus_httpserver.jar
+          - {{ .Values.schema_registry.prometheus.jmx.port | quote }}
+          - /etc/jmx-schema-registry/jmx-schema-registry-prometheus.yml
+          ports:
+          - containerPort: {{ .Values.schema_registry.prometheus.jmx.port }}
+          resources:
+{{ toYaml .Values.schema_registry.prometheus.jmx.resources | indent 12 }}
+          volumeMounts:
+          - name: jmx-config
+            mountPath: /etc/jmx-schema-registry
+          securityContext:
+          {{- if .Values.schema_registry.prometheus.jmx.securityContext }}
+{{ toYaml .Values.schema_registry.prometheus.jmx.securityContext | indent 12 }}
+          {{- end}}
+        {{- end }}
+        - name: {{ template "cp-schema-registry.name" . }}-server
+          image: "{{ .Values.schema_registry.image }}:{{ .Values.schema_registry.imageTag }}"
+          imagePullPolicy: "{{ .Values.schema_registry.imagePullPolicy }}"
+          ports:
+            - name: schema-registry
+              containerPort: {{ .Values.schema_registry.servicePort }}
+              protocol: TCP
+            {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+            - containerPort: {{ .Values.schema_registry.jmx.port }}
+              name: jmx
+            {{- end }}
+          resources:
+{{ toYaml .Values.schema_registry.resources | indent 12 }}
+          env:
+          - name: SCHEMA_REGISTRY_HOST_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: SCHEMA_REGISTRY_LISTENERS
+            value: http://0.0.0.0:{{ .Values.schema_registry.servicePort }}
+          - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+            value: {{ template "cp-schema-registry.kafka.bootstrapServers" . }}
+          - name: SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID
+            value: {{ template "cp-schema-registry.groupId" . }}
+          - name: SCHEMA_REGISTRY_MASTER_ELIGIBILITY
+            value: "true"
+{{/*          - name: SCHEMA_REGISTRY_HEAP_OPTS*/}}
+{{/*            value: "{{ .Values.schema_registry.heapOptions }}"*/}}
+          {{ range $configName, $configValue := .Values.schema_registry.configurationOverrides }}
+          - name: SCHEMA_REGISTRY_{{ $configName | replace "." "_" | upper }}
+            value: {{ $configValue | quote }}
+          {{ end }}
+          {{- range $key, $value := .Values.schema_registry.customEnv }}
+          - name: {{ $key | quote }}
+            value: {{ $value | quote }}
+          {{- end }}
+          {{- if .Values.schema_registry.schemaRegistryOpts }}
+          - name: SCHEMA_REGISTRY_OPTS
+            value: "{{ .Values.schema_registry.schemaRegistryOpts }}"
+          {{- end }}
+          {{- if .Values.schema_registry.jmx.port }}
+          - name: JMX_PORT
+            value: "{{ .Values.schema_registry.jmx.port }}"
+          {{- end }}
+      {{- if .Values.schema_registry.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.schema_registry.imagePullSecrets | indent 8 }}
+      {{- end }}
+      volumes:
+      {{- if .Values.schema_registry.prometheus.jmx.enabled }}
+      - name: jmx-config
+        configMap:
+          name: {{ template "cp-schema-registry.fullname" . }}-jmx-configmap
+      {{- end }}
+      {{- if .Values.schema_registry.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.schema_registry.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.schema_registry.tolerations }}
+      tolerations:
+{{ toYaml .Values.schema_registry.tolerations | indent 8 }}
+      {{- end }}
+      {{- if .Values.schema_registry.affinity }}
+      affinity:
+{{ toYaml .Values.schema_registry.affinity | indent 8 }}
+      {{- end }}

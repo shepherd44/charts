@@ -1,0 +1,13 @@
+apiVersion: v1
+entries:
+  cp-schema-registry:
+  - apiVersion: v1
+    appVersion: 7.5.3
+    created: "2024-01-04T18:39:02.476547+09:00"
+    description: A Helm chart for Confluent Schema Registry on Kubernetes
+    digest: f351facbbe450f501677b6a58a3da11b37ef225156256de72532951b7ab12e60
+    name: cp-schema-registry
+    urls:
+    - https://shepherd44.github.io/helm-charts/cp-schema-registry-0.1.1.tgz
+    version: 0.1.1
+generated: "2024-01-04T18:39:02.475385+09:00"

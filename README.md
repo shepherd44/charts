@@ -1,5 +1,11 @@
 # Helm Chart
 
+## Helm
+
+```shell
+helm repo add shepherd44 https://shepherd44.github.io/helm-charts/docs
+```
+
 ## Package
 
 ```shell
